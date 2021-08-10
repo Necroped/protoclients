@@ -2,6 +2,8 @@ let Client = require('ftp');
 let path = require('path');
 let base = require("../base");
 let publish = require('../default_publish');
+const Stream = require('stream')
+const fs = require('fs');
 
 module.exports = class extends base {
     static parameters = {
@@ -196,7 +198,7 @@ module.exports = class extends base {
                 return {size: 0, mtime: new Date(), isDirectory: () => true};
             });
     }
-    write(target, contents = new Buffer(0), params) {
+    write(target, contents = new Buffer(0), params = {}) {
         return this.wrapper((connection, slot) => Promise.resolve()
             .then(() => {
                 if (params.start) {
@@ -217,6 +219,31 @@ module.exports = class extends base {
                 })
             })));
     }
+    upload(from, to) {
+        return this.wrapper((connection, slot) => Promise.resolve().then(() => {
+            return connection.list(to, (err, stats) => {
+                const source_stream = fs.createReadStream(from, {
+                    start: stats?.[0]?.size || 0,
+                    highWaterMark: 1024//64 * 1024
+                });
+                connection.append(source_stream, to, (err) => {
+                    if(err) throw err
+                });
+                
+                let current = stats?.[0]?.size;
+                source_stream.on('data', (chunk) => {
+                    current += chunk.length;
+                    console.log('Useless console logging : ' + stats?.[0]?.size + ' to ' + current)
+                });
+                source_stream.on('end', () => {
+                    console.log('end')
+                    source_stream.destroy();
+                });
+            });
+        }));
+    }
+
+
     copy(source, target, streams, size, params) {
         if (!streams.readStream) throw {message: "local copy not implemented for " + this.protocol, not_implemented: 1}
         return this.wrapper((connection, slot) => new Promise((resolve, reject) => {
@@ -269,10 +296,21 @@ module.exports = class extends base {
         return this.list_uri(dirname)
             .then(list => list.reduce((p, file) => p
                 .then(() => {
-                    let filename = path.posix.join(dirname, file.name);
-                    if (filename.match(ignored)) return;
-                    if (file.type === 'd') pending_paths.push(filename);
-                    else on_file(filename, {size: file.size, mtime: file.date, isDirectory: () => false})
+                    console.log("---------------")
+                    console.log(dirname, file);
+                    console.log("---------------")
+                    //if(file) {
+                        let filename;
+                        try {
+                            filename = path.posix.join(dirname, file.name);
+                            if (filename.match(ignored)) return;
+                            if (file.type === 'd') pending_paths.push(filename);
+                            else on_file(filename, {size: file.size, mtime: file.date, isDirectory: () => false})
+                        } catch(e) {
+                            console.log("ERROR CATCH")
+                            console.log(list)
+                        }
+                    //}
                 })
                 .catch(on_error), Promise.resolve()))
             .then(() => {

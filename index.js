@@ -1,5 +1,6 @@
 let path = require('path');
 let fs = require('fs-extra');
+const silentLogger = require('./silentLogger.js');
 let protocols = fs.readdirSync(path.posix.join(__dirname, './protocols'));
 let clients = {};
 
@@ -9,14 +10,7 @@ let get_class = protocol => {
 }
 
 module.exports = ({logger, protocol, params} = {}) => {
-    let log = {info() {}, warn() {}, error() {}, verbose() {}, debug() {}};
-    if (logger) {
-        if (typeof logger.info === "function") log.info = logger.info;
-        if (typeof logger.warn === "function") log.warn = logger.warn;
-        if (typeof logger.error === "function") log.error = logger.error;
-        if (typeof logger.debug === "function") log.debug = logger.debug;
-        if (typeof logger.verbose === "function") log.verbose = logger.verbose;
-    }
+    const log = {...logger, ...silentLogger};
     if (!protocols.includes(protocol + ".js")) throw "Incorrect protocol";
     let client_id = get_class(protocol).generate_id(params);
     if (!clients.hasOwnProperty(client_id)) clients[client_id] = new (require('./protocols/' + protocol))(params, log);

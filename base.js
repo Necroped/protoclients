@@ -2,6 +2,7 @@ let path = require('path');
 const get_stream = require('get-stream');
 const is_stream = require('is-stream');
 let watcher = require('./watcher');
+const silentLogger = require('./silentLogger.js');
 
 module.exports = class {
     static parameters = {
@@ -11,12 +12,12 @@ module.exports = class {
     };
     static accept_ranges = true;
     constructor(params, logger, protocol) {
-        this.logger = logger;
+        this.logger = {...logger, ...silentLogger};
         this.protocol = protocol;
         this.params = {};
         this.disconnect_timeout = [];
-        this.queue = require("parallel_limit")(params.parallel);
-        this.connections = new Array(params.parallel).fill(null);
+        this.queue = require("parallel_limit")(params?.parallel || 100);
+        this.connections = new Array(params?.parallel || 100).fill(null);
         this.update_settings(params);
     }
     id() {
@@ -24,7 +25,7 @@ module.exports = class {
     }
     update_settings(params) {
         this.params = params;
-        this.queue.set_size(params.parallel);
+        this.queue.set_size(params?.parallel || 100);
     }
     wrapper(f, control_release) {
         return this.queue.run((slot, slot_control) => Promise.resolve()
